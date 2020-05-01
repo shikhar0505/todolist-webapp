@@ -4,14 +4,18 @@ const express = require("express");
 const bodyParser = require("body-parser");
 const date = require(__dirname + "/modules/date.js");
 const mongoose = require("mongoose");
+const _ = require('lodash');
 
 const app = express();
 app.set("view engine", "ejs");
 app.use(bodyParser.urlencoded({extended: true}));
 app.use(express.static("public"));
 
-// mongoose models
+// mongoose db connection
 mongoose.connect("mongodb://localhost:27017/todolistDB", {useNewUrlParser: true});
+mongoose.set('useFindAndModify', false);
+
+// mongoose models
 const itemSchema = {
   name: String
 };
@@ -33,7 +37,6 @@ function addTodoItem(listName, itemName) {
     if (!err) {
       if (!foundList) {
         // create a new list
-        console.log("creating new list");
         const list = new List ({
           name: listName,
           items: [item]
@@ -41,7 +44,6 @@ function addTodoItem(listName, itemName) {
         list.save();
       } else {
         // add to an existing list
-        console.log("adding to existing list");
         foundList.items.push(item);
         foundList.save();
       }
@@ -51,17 +53,17 @@ function addTodoItem(listName, itemName) {
 
 function deleteTodoItem(listName, itemName) {
   List.findOneAndUpdate({name: listName}, {$pull: {items: {name: itemName}}}, function(err, foundList) {
-
+    console.log(foundList);
   });
 }
 
 // endpoints
 app.get("/:listName", function(req, res) {
-  List.findOne({name: req.params.listName}, function(err, foundList) {
+  List.findOne({name: _.capitalize(req.params.listName)}, function(err, foundList) {
     if (!err) {
       res.render("index", {
         newListItems: (!foundList ? [] : foundList.items),
-        listTitle: req.params.listName
+        listTitle: _.capitalize(req.params.listName)
       });
     }
   });
@@ -69,14 +71,14 @@ app.get("/:listName", function(req, res) {
 
 app.post("/:listName", function(req, res){
   if (req.body.newItem !== "") {
-    addTodoItem(req.params.listName, req.body.newItem);
+    addTodoItem(_.capitalize(req.params.listName), req.body.newItem);
   }
-  res.redirect("/" + req.params.listName);
+  res.redirect("/" + _.capitalize(req.params.listName));
 });
 
 app.post("/:listName/delete", function(req, res) {
-  deleteTodoItem(req.params.listName, req.body.checkbox);
-  res.redirect("/" + req.params.listName);
+  deleteTodoItem(_.capitalize(req.params.listName), req.body.checkbox);
+  res.redirect("/" + _.capitalize(req.params.listName));
 });
 
 app.listen(3000, function() {
