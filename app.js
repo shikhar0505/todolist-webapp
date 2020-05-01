@@ -10,51 +10,73 @@ app.set("view engine", "ejs");
 app.use(bodyParser.urlencoded({extended: true}));
 app.use(express.static("public"));
 
-// connect/create to db + read todo list
+// mongoose models
 mongoose.connect("mongodb://localhost:27017/todolistDB", {useNewUrlParser: true});
-const todoItemsSchema = {
+const itemSchema = {
   name: String
 };
-const TodoItem = mongoose.model("TodoItem", todoItemsSchema);
+const Item = mongoose.model("Item", itemSchema);
+
+const listSchema = {
+  name : String,
+  items: [itemSchema]
+};
+const List = mongoose.model("List", listSchema);
 
 // db handlers
-function addTodoItem(newItem) {
-  const item = new TodoItem ({
-    name: newItem
+function addTodoItem(listName, itemName) {
+  const item = new Item ({
+    name: itemName
   });
-  item.save();
-}
 
-function deleteTodoItem(itemName) {
-  TodoItem.findOneAndDelete({ name: itemName }, function (err) {
-    if (err) {
-      console.log(err);
-    } else {
-      console.log("Successfully deleted " + itemName);
+  List.findOne({name: listName}, function(err, foundList) {
+    if (!err) {
+      if (!foundList) {
+        // create a new list
+        console.log("creating new list");
+        const list = new List ({
+          name: listName,
+          items: [item]
+        });
+        list.save();
+      } else {
+        // add to an existing list
+        console.log("adding to existing list");
+        foundList.items.push(item);
+        foundList.save();
+      }
     }
   });
 }
 
+function deleteTodoItem(listName, itemName) {
+  List.findOneAndUpdate({name: listName}, {$pull: {items: {name: itemName}}}, function(err, foundList) {
+
+  });
+}
+
 // endpoints
-app.get("/", function(req, res){
-  TodoItem.find({}, function(err, foundItems) {
-    res.render("index", {
-      newListItems: foundItems,
-      listTitle: date.getDate()
-    });
+app.get("/:listName", function(req, res) {
+  List.findOne({name: req.params.listName}, function(err, foundList) {
+    if (!err) {
+      res.render("index", {
+        newListItems: (!foundList ? [] : foundList.items),
+        listTitle: req.params.listName
+      });
+    }
   });
 });
 
-app.post("/", function(req, res){
+app.post("/:listName", function(req, res){
   if (req.body.newItem !== "") {
-    addTodoItem(req.body.newItem);
+    addTodoItem(req.params.listName, req.body.newItem);
   }
-  res.redirect("/");
+  res.redirect("/" + req.params.listName);
 });
 
-app.post("/delete", function(req, res) {
-  deleteTodoItem(req.body.checkbox);
-  res.redirect("/");
+app.post("/:listName/delete", function(req, res) {
+  deleteTodoItem(req.params.listName, req.body.checkbox);
+  res.redirect("/" + req.params.listName);
 });
 
 app.listen(3000, function() {
